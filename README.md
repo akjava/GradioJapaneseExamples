@@ -1,0 +1,2 @@
+# GradioJapaneseExamples
+日本語でGradioのExamples
