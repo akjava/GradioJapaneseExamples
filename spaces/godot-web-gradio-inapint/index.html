@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>My Template</title>
+        <meta charset="UTF-8">
+        <script crossorigin='anonymous' src="https://unpkg.com/es-module-shims@1.7.0/dist/es-module-shims.js"></script>
+		<script  type="importmap">
+			{
+				"imports": {
+					"@huggingface/hub": "https://cdn.jsdelivr.net/npm/@huggingface/hub@0.13.0/+esm",
+                    "@gradio/client":"https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js"
+				}
+			}
+		</script>
+    </head>
+    <body>
+        
+        <canvas id="canvas"></canvas>
+        
+        <script src="ghugging.js"></script>
+
+        <script type="module">
+         //console.log(window.Buffer)
+         //console.log(Buffer)
+         import { oauthLoginUrl, oauthHandleRedirectIfPresent } from "@huggingface/hub";
+         window.oauthLoginUrl = oauthLoginUrl;
+         window.oauthHandleRedirectIfPresent = oauthHandleRedirectIfPresent;
+
+         import { Client,handle_file } from "@gradio/client";
+         window.Client = Client;
+         
+         //if has buffer huggingface signin-use that,I try to set real Buffer but faild
+         //once post login not work any more
+         //window.Buffer = ArrayBuffer
+         
+         
+         // passing array seems ok others arraybuffer,unit8array faild
+         Client.send_image_dict = async function(url,hf_token,prompt,dict,inpaint_strength,_js_callback){
+            try {
+            window.Buffer = ArrayBuffer
+            if( hf_token == ""){
+                console.log("send_dict1 without token")
+            }else{
+                console.log("send_dict1 with token")
+            }
+                
+            
+            console.log(dict)
+            
+            //Error: Invalid input: must be a URL, File, Blob, or Buffer object.
+            //File Path not working in godot
+
+            //URL become Gradio FileData,must be start with "http"
+            //const file_ref = handle_file("http://localhost:8000/gradio/gradio/index.png");
+            //console.log(file_ref)
+            //Buffer is Node object
+            //var array = new ArrayBuffer(test);
+            var array1 = new Uint8Array(dict["image"]); //gradle faild
+            const blob1 = new Blob([array1.buffer],{type:"image/jpeg"});
+            const file_ref1 = handle_file(blob1)
+            console.log(file_ref1)
+
+            var array2 = new Uint8Array(dict["mask"]); //gradle faild
+            const blob2 = new Blob([array2.buffer],{type:"image/jpeg"});
+            const file_ref2 = handle_file(blob2)
+            console.log(file_ref2)
+
+            
+            const app =  await Client.connect(url,{hf_token:hf_token,events: ["data","status"]});
+            const app_info =  app.view_api();
+            console.log(app_info)
+            /*
+            const app =  await Client.connect(url)
+            var result = await app.predict(
+                "/predict",{"prompt":"beautiful girl nude","image1":file_ref1,"image2":file_ref2}  //send as tmp file?
+            )
+
+            console.log("result")
+            console.log(result)
+           
+            _js_callback(result["data"][0].url.toString())
+            */
+
+            //akjava
+            //const submission = app.submit("/predict", {"prompt":prompt,"image1":file_ref1,"image2":file_ref2})
+            console.log(url)
+            var parameter = {"image":{"background":file_ref1,"layers":[file_ref2]}}
+
+            var end_point = "/infer"
+
+            //NOT IN PAINT CASE NEED PROMPT
+            if( url!="Akjava/OpenCVInpaintCPU"){
+                parameter["prompt"] = prompt
+                parameter["strength"] = inpaint_strength
+                if( url == "Akjava/flux1-schnell-img2img"){
+                    end_point = "/process_images"
+                    parameter["image"] = file_ref1
+                }
+            }
+            
+            
+            console.log(parameter)
+            const submission = app.submit(end_point, parameter)
+
+
+            var result_url
+            for await (const msg of submission) {
+            if (msg.type === "data") {
+                console.log(msg);
+                console.log(msg.data);
+                console.log(msg["data"][0].url)
+                result_url = msg["data"][0].url
+                //_js_callback(msg["data"][0].url)
+            }
+            //
+            if (msg.type === "status") {
+                console.log(msg);
+                if (msg.stage == "complete"){
+                    console.log("complete")
+                    _js_callback(result_url)
+                }else if (msg.stage =="error"){
+                    console.log("error")
+                    _js_callback(msg.message)
+                }
+                
+            }   
+        }
+    }catch(error){
+        _js_callback(error.message)
+    }
+            
+         };
+
+         Client.test1 = async function(hf_token,test,_js_callback){
+            
+            console.log("array value")
+            
+            //Error: Invalid input: must be a URL, File, Blob, or Buffer object.
+            //File Path not working in godot
+
+            //URL become Gradio FileData,must be start with "http"
+            //const file_ref = handle_file("http://localhost:8000/gradio/gradio/index.png");
+            //console.log(file_ref)
+            //Buffer is Node object
+            //var array = new ArrayBuffer(test);
+            var array = new Uint8Array(test); //gradle faild
+            
+            const blob = new Blob([array.buffer],{type:"image/jpeg"});
+            //console.log(blob)
+            const file_ref = handle_file(blob)
+            console.log(file_ref)
+
+            const url = "https://xxx.gradio.live" //"http://localhost:7861"
+            const app =  await Client.connect(url)
+            var result = await app.predict(
+                "/predict",{"image1":file_ref}  //send as tmp file?
+            )
+            console.log("result")
+            console.log(result)
+            console.log(result["data"][0].url)
+            _js_callback(result["data"][0].url.toString())
+         };
+        
+
+         Client.connect2 = async function(client,url,input,_callback) {
+           
+            const app =  await client.connect(url,{hf_token:hf_token,events: ["data","status"]});
+            console.log(app.config);
+            const app_info =  app.view_api();
+            console.log(app_info)
+
+            // <PREDICT VERSION>
+            /*
+            var result = await app.predict(
+            //    "/predict", {"input_text":"input"}
+            "/chat",{"message":input}
+            
+        )*/
+        // </PREDICT VERSION>
+        
+        const submission =      app.submit("/chat", { message: input })
+
+for await (const msg of submission) {
+    if (msg.type === "data") {
+        console.log(msg.data);
+        console.log(msg);
+        _callback(msg)
+    }
+
+    if (msg.type === "status") {
+        console.log(msg);
+    }
+}
+return submission
+
+            //console.log(result)
+            //console.log("done in script")
+            //console.log(result)
+            //_callback((result))
+            //_callback(JSON.stringify(result))
+            //return result
+            //return app_info
+           //return "hello"
+        };
+         
+        
+         
+        </script>
+
+        <script src="index.js"></script>
+        <script>
+            var engine = new Engine({"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":285936,"index.wasm":35376909},"focusCanvas":true,"gdextensionLibs":[]});
+            engine.startGame();
+        </script>
+    </body>
+</html>

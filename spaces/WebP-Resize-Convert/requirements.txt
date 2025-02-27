@@ -1,0 +1,3 @@
+spaces
+numpy
+opencv-contrib-python
